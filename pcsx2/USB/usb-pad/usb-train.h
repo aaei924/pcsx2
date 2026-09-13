@@ -101,7 +101,7 @@ namespace usb_pad
 
 		void Reset();
 		void UpdateHatSwitch() noexcept;
-		void UpdateHandles(u8 max_power, u8 max_brake);
+		void UpdateHandles();
 
 		USBDevice dev{};
 		USBDesc desc{};
@@ -125,6 +125,17 @@ namespace usb_pad
 			u16 buttons; // active high
 		} data = {};
 
+		// Analog Mascon input
+	    u8 handle_axis = 0x80;
+	    u8 reverser_axis = 0x00;
+	
+	    // Resolved Mascon notch
+	    s8 last_handle = -1;
+	    s8 handle = 9; // N
+	
+	    s8 last_reverser = -1;
+	    s8 reverser = 0; // Neutral
+
 		// Master Controller
 		const char* mc_handle[16] = {"TSB20", "TSB30", "TSB40", "TSE99", "TSA05", "TSA15", "TSA25", "TSA35", "TSA45", "TSA50", "TSA55", "TSA65", "TSA75", "TSA85", "TSA95", "TSB60"};
 		const char* mc_reverser[3] = {"TSG00", "TSG50", "TSG99"};
@@ -134,8 +145,6 @@ namespace usb_pad
 		u8 brake_notches;
 
 		u16 prev_buttons;
-		s8 last_handle = -1, handle = 0;
-		s8 last_reverser = -1, reverser = 1;
 	};
 
 	// Taito Densha Controllers as described at:
