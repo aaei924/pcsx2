@@ -47,6 +47,9 @@ namespace usb_pad
 	{
 		CID_TC_POWER,
 		CID_TC_BRAKE,
+		CID_TC_HANDLE,
+    	CID_TC_REVERSER,
+
 		CID_TC_UP,
 		CID_TC_RIGHT,
 		CID_TC_DOWN,
@@ -123,10 +126,8 @@ namespace usb_pad
 			case TRAIN_MASCON:
 			{
 				static constexpr const InputBindingInfo bindings[] = {
-					{"PowerUp", TRANSLATE_NOOP("USB", "Power Up"), nullptr, InputBindingInfo::Type::Button, CID_TC_POWER_UP, GenericInputBinding::R1},
-					{"PowerDown", TRANSLATE_NOOP("USB", "Power Down"), nullptr, InputBindingInfo::Type::Button, CID_TC_POWER_DOWN, GenericInputBinding::L1},
-					{"ReverserUp", TRANSLATE_NOOP("USB", "Reverser Up"), nullptr, InputBindingInfo::Type::Button, CID_TC_REVERSER_UP, GenericInputBinding::R2},
-					{"ReverserDown", TRANSLATE_NOOP("USB", "Reverser Down"), nullptr, InputBindingInfo::Type::Button, CID_TC_REVERSER_DOWN, GenericInputBinding::L2},
+					{"Handle", TRANSLATE_NOOP("USB", "Handle"), nullptr, InputBindingInfo::Type::Axis, CID_TC_HANDLE, GenericInputBinding::LeftStickDown},
+					{"Reverser", TRANSLATE_NOOP("USB", "Reverser"), nullptr, InputBindingInfo::Type::Axis, CID_TC_REVERSER, GenericInputBinding::LeftStickUp},
 
 					{"Up", TRANSLATE_NOOP("USB", "D-Pad Up"), ICON_PF_DPAD_UP, InputBindingInfo::Type::Button, CID_TC_UP, GenericInputBinding::DPadUp},
 					{"Down", TRANSLATE_NOOP("USB", "D-Pad Down"), ICON_PF_DPAD_DOWN, InputBindingInfo::Type::Button, CID_TC_DOWN, GenericInputBinding::DPadDown},
@@ -146,10 +147,8 @@ namespace usb_pad
 			case MASTER_CONTROLLER:
 			{
 				static constexpr const InputBindingInfo bindings[] = {
-					{"PowerUp", TRANSLATE_NOOP("USB", "Power Up"), nullptr, InputBindingInfo::Type::Button, CID_TC_POWER_UP, GenericInputBinding::R1},
-					{"PowerDown", TRANSLATE_NOOP("USB", "Power Down"), nullptr, InputBindingInfo::Type::Button, CID_TC_POWER_DOWN, GenericInputBinding::L1},
-					{"ReverserUp", TRANSLATE_NOOP("USB", "Reverser Up"), nullptr, InputBindingInfo::Type::Button, CID_TC_REVERSER_UP, GenericInputBinding::R2},
-					{"ReverserDown", TRANSLATE_NOOP("USB", "Reverser Down"), nullptr, InputBindingInfo::Type::Button, CID_TC_REVERSER_DOWN, GenericInputBinding::L2},
+					{"Handle", TRANSLATE_NOOP("USB", "Handle"), nullptr, InputBindingInfo::Type::Axis, CID_TC_HANDLE, GenericInputBinding::LeftStickDown},
+					{"Reverser", TRANSLATE_NOOP("USB", "Reverser"), nullptr, InputBindingInfo::Type::Axis, CID_TC_REVERSER, GenericInputBinding::LeftStickUp},
 					{"S", TRANSLATE_NOOP("USB", "S"), ICON_PF_KEY_S, InputBindingInfo::Type::Button, CID_TC_D, GenericInputBinding::Cross},
 					{"A", TRANSLATE_NOOP("USB", "A"), ICON_PF_KEY_A, InputBindingInfo::Type::Button, CID_TC_A, GenericInputBinding::Square},
 					{"B", TRANSLATE_NOOP("USB", "B"), ICON_PF_KEY_B, InputBindingInfo::Type::Button, CID_TC_B, GenericInputBinding::Triangle},
@@ -283,6 +282,11 @@ namespace usb_pad
 			case CID_TC_BRAKE:
 				return (static_cast<float>(s->data.brake) / 255.0f);
 
+			case CID_TC_HANDLE:
+			    return (static_cast<float>(s->handle_axis) / 255.0f);
+			case CID_TC_REVERSER:
+			    return (static_cast<float>(s->reverser_axis) / 255.0f);
+
 			case CID_TC_UP:
 				return static_cast<float>(s->data.hat_up);
 			case CID_TC_DOWN:
@@ -324,6 +328,14 @@ namespace usb_pad
 			case CID_TC_BRAKE:
 				s->data.brake = static_cast<u32>(std::clamp<long>(std::lroundf(value * 255.0f), 0, 255));
 				break;
+
+			case CID_TC_HANDLE:
+			    s->handle_axis = static_cast<u8>(std::clamp<long>(std::lroundf(value * 255.0f), 0, 255));
+			    break;
+			
+			case CID_TC_REVERSER:
+			    s->reverser_axis = static_cast<u8>(std::clamp<long>(std::lroundf(value * 255.0f), 0, 255));
+			    break;
 
 			case CID_TC_UP:
 				s->data.hat_up = static_cast<u8>(std::clamp<long>(std::lroundf(value * 255.0f), 0, 255));
@@ -556,14 +568,52 @@ namespace usb_pad
 
 	void TrainDeviceState::UpdateHandles(u8 max_power, u8 max_brake)
 	{
-		if (!button_at(prev_buttons, CID_TC_POWER_UP) && button_at(data.buttons, CID_TC_POWER_UP) && handle < max_brake + 1 + max_power)
-			handle++;
-		if (!button_at(prev_buttons, CID_TC_POWER_DOWN) && button_at(data.buttons, CID_TC_POWER_DOWN) && handle > 0)
-			handle--;
-		if (!button_at(prev_buttons, CID_TC_REVERSER_UP) && button_at(data.buttons, CID_TC_REVERSER_UP) && reverser < 2)
-			reverser++;
-		if (!button_at(prev_buttons, CID_TC_REVERSER_DOWN) && button_at(data.buttons, CID_TC_REVERSER_DOWN) && reverser > 0)
-			reverser--;
+		handle = mascon_axis_to_handle(handle_axis);
+    	reverser = mascon_axis_to_reverser(reverser_axis);
+	}
+
+	static u8 mascon_axis_to_handle(u8 value)
+	{
+	    static constexpr u8 notches[] = {
+	        0x00, // EB
+	        0x05, // B8
+	        0x13, // B7
+	        0x20, // B6
+	        0x2E, // B5
+	        0x3C, // B4
+	        0x49, // B3
+	        0x57, // B2
+	        0x65, // B1
+	        0x80, // N
+	        0x9F, // P1
+	        0xB7, // P2
+	        0xCE, // P3
+	        0xE6, // P4
+	        0xFF, // P5
+	    };
+	
+	    for (u8 i = 0; i < std::size(notches) - 1; i++)
+	    {
+	        const u16 threshold =
+	            (static_cast<u16>(notches[i]) +
+	             static_cast<u16>(notches[i + 1])) / 2;
+	
+	        if (value < threshold)
+	            return i;
+	    }
+	
+	    return std::size(notches) - 1;
+	}
+
+	static u8 mascon_axis_to_reverser(u8 value)
+	{
+	    if (value < 0x40)
+	        return 0; // Neutral
+	
+	    if (value < 0xC0)
+	        return 1; // Forward
+	
+	    return 2; // Backward
 	}
 
 	static void train_handle_data(USBDevice* dev, USBPacket* p)
@@ -617,13 +667,12 @@ namespace usb_pad
 			}
 			case TRAIN_MASCON:
 			{
-				s->UpdateHandles(5, 6);
-				s->prev_buttons = s->data.buttons;
+				s->UpdateHandles();
 
 				TrainConData_TrainMascon out = {};
 				out.one = 0x01;
 				out.handle = 1 + s->handle;
-				out.reverser = s->reverser < 2 ? !s->reverser : s->reverser;
+				out.reverser = s->reverser;
 				out.ats = !!button_at(s->data.buttons, CID_TC_ATS);
 				out.close = !!button_at(s->data.buttons, CID_TC_CLOSE);
 				out.button_a_soft = !!button_at(s->data.buttons, CID_TC_A);
@@ -654,7 +703,7 @@ namespace usb_pad
 					break;
 				} // else bulk in
 
-				s->UpdateHandles(s->power_notches, s->brake_notches);
+				s->UpdateHandles();
 
 				char data[100];
 				std::memset(data, 0, sizeof(data));
@@ -662,7 +711,7 @@ namespace usb_pad
 
 				if (s->last_handle != s->handle)
 				{
-					pos += snprintf(data + pos, sizeof(data) - pos, "%s\x0d", s->mc_handle[s->handle + 8 - s->brake_notches]);
+					pos += snprintf(data + pos, sizeof(data) - pos, "%s\x0d", s->mc_handle[s->handle]);
 					s->last_handle = s->handle;
 				}
 				if (s->last_reverser != s->reverser)
